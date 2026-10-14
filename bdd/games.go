@@ -10,34 +10,42 @@ import (
 
 )
 
-func GetAllGames(ctx context.Context, limit int, skip int) ([]models.Game, error) {
+func GetAllGames(ctx context.Context, limit int64, skip int64, sortField string, sortOrder int, filter bson.M) ([]models.Game, int64, error) {
+	totalCount, err := Database.Collection("games").CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("erreur de comptage des documents: %v", err)
+	}
+	
 
-	limit = r.URL.Query().Get("limit") // recup le sparm de la requete
-	skip = r.URL.Query().Get("skip")
+	sort := bson.D{{Key: sortField, Value: sortOrder}}
 
-	opts := options.Find().SetLimit(int64(limit)).SetSkip(int64(skip))
+	if sortField != "_id" {
+	sort = append(sort, bson.E{Key: "_id", Value: 1})
+	}
+
+	opts := options.Find().SetLimit(limit).SetSkip(skip).SetSort(sort)// ordre stable
 
 	games := []models.Game{}
 
-	cursor, err := Database.Collection("games").Find(ctx, map[string]interface{}{})
+	cursor, err := Database.Collection("games").Find(ctx, filter, opts)
 	if err != nil {
-		return nil, fmt.Errorf("erreur recup jeu %v", err)
+		return nil, 0, fmt.Errorf("erreur recup jeux: %v", err)
 	}
 	defer cursor.Close(ctx)
 
 	for cursor.Next(ctx) {
 		var game models.Game
 		if err := cursor.Decode(&game); err != nil {
-			return nil, fmt.Errorf("erreur de décodage du jeu: %v", err)
+			return nil, 0, fmt.Errorf("erreur de décodage du jeu: %v", err)
 		}
 		games = append(games, game)
 	}
 
 	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("cursor error: %v", err)
+		return nil, 0, fmt.Errorf("cursor error: %v", err)
 	}
 
-	return games, nil
+	return games, totalCount, nil
 }
 
 func GetGameByID(id int) (*models.Game, error) {

@@ -2,7 +2,7 @@
 
 API REST en Go qui expose une base de jeux Steam stockée dans MongoDB.
 
-> État actuel : CRUD des jeux fonctionnel. Pagination, tri, filtres et authentification JWT en cours.
+> État actuel : CRUD des jeux, pagination, tri et filtres fonctionnels. Authentification JWT en cours.
 
 ## Stack
 
@@ -98,6 +98,36 @@ Notes :
 - Le **PUT remplace le jeu entier** : les champs absents du body sont vidés.
 - Pour le PUT, l'id de l'**URL** fait foi, celui du body est ignoré.
 
+## Liste des jeux : pagination, tri et filtres
+
+`GET /api/v1/games` accepte les paramètres suivants. Tous sont facultatifs et combinables.
+
+| Paramètre | Rôle | Valeurs | Défaut |
+|---|---|---|---|
+| `page` | Numéro de la page | Entier ≥ 1 | `1` |
+| `limit` | Nombre de jeux par page | Entier de 1 à 100 | `5` |
+| `ordering` | Tri | `title`, `-title`, `release_year`, `-release_year` | Par id croissant |
+| `title` | Titre contenant ce texte, sans tenir compte des majuscules | Texte | Aucun filtre |
+| `release_year` | Année de sortie exacte | Entier | Aucun filtre |
+
+- Un `-` devant le champ de `ordering` trie en ordre décroissant.
+- En cas d'égalité sur le champ trié, les jeux sont départagés par id croissant, pour garder un ordre stable entre les pages.
+- `total` et `total_pages` tiennent compte des filtres.
+- Une page au-delà de la dernière renvoie **200** avec `results` vide.
+- Une valeur invalide (`page=0`, `limit=500`, `release_year=abc`, `ordering=prix`…) renvoie **400**.
+
+Format de la réponse :
+
+```json
+{
+  "page": 2,
+  "limit": 5,
+  "total": 27075,
+  "total_pages": 5415,
+  "results": [ { "id": 570, "title": "Dota 2", "...": "..." } ]
+}
+```
+
 ## Format des erreurs
 
 Toutes les erreurs sont renvoyées en JSON :
@@ -122,8 +152,20 @@ Toutes les erreurs sont renvoyées en JSON :
 ### Lister les jeux
 
 ```bash
+# Page 1, valeurs par défaut
 curl -i http://localhost:8080/api/v1/games
+
+# Page 2, 10 jeux par page
+curl "http://localhost:8080/api/v1/games?page=2&limit=10"
+
+# Les jeux les plus récents en premier
+curl "http://localhost:8080/api/v1/games?ordering=-release_year"
+
+# Les jeux de 2020 dont le titre contient "war", par ordre alphabétique
+curl "http://localhost:8080/api/v1/games?title=war&release_year=2020&ordering=title"
 ```
+
+Mettre l'URL entre guillemets dans le terminal quand elle contient un `&`.
 
 ### Récupérer un jeu
 
@@ -180,9 +222,10 @@ curl -i -X DELETE http://localhost:8080/api/v1/games/999999
 
 ## Reste à faire
 
-- [ ] Pagination (`page`, `limit`)
-- [ ] Tri (`ordering`)
-- [ ] Filtres (`title`, `release_year`, ...)
+- [x] Pagination (`page`, `limit`)
+- [x] Tri (`ordering`)
+- [x] Filtres (`title`, `release_year`)
+- [ ] Erreurs au format JSON sur toutes les routes
 - [ ] Authentification JWT sur POST, PUT et DELETE
 - [ ] Documentation Swagger / OpenAPI
 - [ ] CORS et logs
