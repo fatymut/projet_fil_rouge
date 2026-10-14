@@ -1,0 +1,39 @@
+info:
+  name: post
+  type: http
+
+http:
+  method: POST
+  url: http://148.113.243.29:8080/api/v1/games
+  body:
+    type: json
+    data: |-
+      {
+        "id": 999999,
+        "title": "Jeu de test",
+        "required_age": 12,
+        "is_free": false,
+        "description": "Un jeu créé pour tester l'API",
+        "image": "https://example.com/test.jpg",
+        "website": "https://example.com",
+        "developers": ["ESGI"],
+        "publishers": ["ESGI"],
+        "platforms": ["windows", "linux"],
+        "metacritic_score": 75,
+        "categories": [
+          { "id": 2, "description": "Single-player" }
+        ],
+        "genres": [
+          { "id": 1, "description": "Action" }
+        ],
+        "recommendations": 0,
+        "release_date": "2026-10-13",
+        "release_year": 2026
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

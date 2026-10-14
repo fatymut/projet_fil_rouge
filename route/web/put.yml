@@ -1,0 +1,38 @@
+info:
+  name: put
+  type: http
+
+http:
+  method: PUT
+  url: http://148.113.243.29:8080/api/v1/games/999999
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Jeu de test modifié",
+        "required_age": 16,
+        "is_free": true,
+        "description": "Description mise à jour",
+        "image": "https://example.com/test-v2.jpg",
+        "website": "https://example.com",
+        "developers": ["ESGI"],
+        "publishers": ["ESGI"],
+        "platforms": ["windows"],
+        "metacritic_score": 90,
+        "categories": [
+          { "id": 1, "description": "Multi-player" }
+        ],
+        "genres": [
+          { "id": 2, "description": "Strategy" }
+        ],
+        "recommendations": 10,
+        "release_date": "2026-10-14",
+        "release_year": 2026
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

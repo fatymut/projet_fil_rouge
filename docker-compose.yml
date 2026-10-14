@@ -1,0 +1,39 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      GLIBC_TUNABLES: "glibc.pthread.rseq=1"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app-network
+
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go_webapi
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      MONGO_URI: "mongodb://mongodb:27017"
+      DB_NAME: "pa2026"
+      PORT: "8080"
+      JWT_SECRET: "supersecretkey123"
+      USER_FILE: "users.json"
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
