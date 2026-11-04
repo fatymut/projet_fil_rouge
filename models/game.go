@@ -28,3 +28,13 @@ type Game struct {
 	ReleaseDate     string     `bson:"release_date" json:"release_date"`
 	ReleaseYear     int        `bson:"release_year" json:"release_year"`
 }
+
+type User struct {
+	Username     string `bson:"username" json:"username"`
+	PasswordHash string `bson:"password_hash" json:"password_hash"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
