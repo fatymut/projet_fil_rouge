@@ -2,5 +2,9 @@
   {
     "username": "admin",
     "password_hash": "$2a$10$yLxM1Oe7NMaJyNzuaknlOOF.obNItYhM1QO3/Ih/sv57qFJoYLssm"
+  },
+  {
+    "username": "testuser",
+    "password_hash": "$2a$10$VqBk558O/qvTC5m4Sl4jA.jypJ9o0qCcqjhYaATfndKhJoAfLvt9i"
   }
 ]
