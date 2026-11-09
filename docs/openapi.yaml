@@ -1,0 +1,348 @@
+openapi: 3.0.3
+info:
+  title: API Games
+  version: 1.0.0
+  description: |
+    API de gestion d'un catalogue de jeux.
+
+    Pour appeler les routes protégées : exécuter `POST /login`, copier le token
+    reçu, cliquer sur **Authorize** et le coller (sans le préfixe `Bearer`).
+servers:
+  - url: /api/v1
+tags:
+  - name: Authentification
+  - name: Jeux
+paths:
+  /login:
+    post:
+      tags: [Authentification]
+      summary: Se connecter et obtenir un token JWT valable 24 h
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Identifiants incorrects
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Invalid username or password
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /games:
+    get:
+      tags: [Jeux]
+      summary: Lister les jeux avec pagination, filtres et tri
+      operationId: listGames
+      parameters:
+        - name: page
+          in: query
+          description: Numéro de page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Nombre de jeux par page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 5
+        - name: title
+          in: query
+          description: Filtre sur le titre, insensible à la casse. La valeur est interprétée comme une expression régulière.
+          schema:
+            type: string
+        - name: release_year
+          in: query
+          description: Filtre sur l'année de sortie
+          schema:
+            type: integer
+        - name: ordering
+          in: query
+          description: Champ de tri, préfixé par `-` pour un tri décroissant
+          schema:
+            type: string
+            enum: [title, -title, release_year, -release_year]
+      responses:
+        '200':
+          description: Page de résultats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamesPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Jeux]
+      summary: Créer un jeu
+      operationId: createGame
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Game'
+      responses:
+        '201':
+          description: Jeu créé (réponse sans contenu)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Erreur serveur, y compris lorsque l'id est déjà utilisé
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Erreur lors de la création du jeu
+  /games/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      tags: [Jeux]
+      summary: Récupérer un jeu
+      operationId: getGame
+      responses:
+        '200':
+          description: Jeu trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Jeu introuvable
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Jeu non trouvé
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [Jeux]
+      summary: Remplacer un jeu
+      description: Remplace tout le document. L'id de l'URL est conservé, celui du corps est ignoré.
+      operationId: updateGame
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Game'
+      responses:
+        '200':
+          description: Jeu modifié (réponse sans contenu)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Erreur serveur, y compris lorsque le jeu n'existe pas
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Erreur lors de la mise à jour du jeu
+    delete:
+      tags: [Jeux]
+      summary: Supprimer un jeu
+      operationId: deleteGame
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Jeu supprimé (réponse sans contenu)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Erreur serveur, y compris lorsque le jeu n'existe pas
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Erreur lors de la suppression du jeu
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    GameId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant du jeu
+      schema:
+        type: integer
+      example: 999999
+  responses:
+    BadRequest:
+      description: Requête invalide
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: limit doit être compris entre 1 et 100
+    Unauthorized:
+      description: Token absent, invalide ou expiré
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: wrong token
+    InternalError:
+      description: Erreur serveur
+      content:
+        text/plain:
+          schema:
+            type: string
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: testuser
+        password:
+          type: string
+          format: password
+          example: monmotdepasse
+    LoginResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        description:
+          type: string
+          example: Single-player
+    Genre:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        description:
+          type: string
+          example: Action
+    Game:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 999999
+        title:
+          type: string
+          example: Jeu de test
+        required_age:
+          type: integer
+          example: 12
+        is_free:
+          type: boolean
+          example: false
+        description:
+          type: string
+          example: Un jeu créé pour tester l'API
+        image:
+          type: string
+          example: https://example.com/test.jpg
+        website:
+          type: string
+          example: https://example.com
+        developers:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example: [ESGI]
+        publishers:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example: [ESGI]
+        platforms:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example: [windows, linux]
+        metacritic_score:
+          type: integer
+          example: 75
+        categories:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Category'
+        genres:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Genre'
+        recommendations:
+          type: integer
+          example: 0
+        release_date:
+          type: string
+          example: '2026-10-13'
+        release_year:
+          type: integer
+          example: 2026
+    GamesPage:
+      type: object
+      required: [page, limit, total, total_pages, results]
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 5
+        total:
+          type: integer
+          format: int64
+          example: 51822
+        total_pages:
+          type: integer
+          format: int64
+          example: 10365
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Game'

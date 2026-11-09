@@ -5,9 +5,15 @@ import (
 
 	"rouge/admin"
 	"rouge/auth"
+	"rouge/docs"
 )
 
 func Register() {
+	// API documentation
+	http.HandleFunc("GET /swagger", docs.SwaggerUIHandler)
+	http.HandleFunc("GET /swagger/{$}", docs.SwaggerUIHandler)
+	http.HandleFunc("GET /swagger/openapi.yaml", docs.OpenAPIHandler)
+
 	// Routes anyone can access
 	http.HandleFunc("POST /api/v1/login", auth.LoginHandler)
 	http.HandleFunc("GET /api/v1/games", admin.GetAllGamesHandler)
