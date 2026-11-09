@@ -1,0 +1,201 @@
+# Tests de l'API games
+# À utiliser avec l'extension VS Code "REST Client".
+# Avant le premier lancement, créer l'utilisateur de test :
+#   go run . u testuser -p monmotdepasse
+# Exécuter les requêtes dans l'ordre : le login fournit le token des suivantes.
+
+# Serveur local (décommenter la ligne du serveur distant pour le viser à la place)
+@baseUrl = http://localhost:8080/api/v1
+# @baseUrl = http://148.113.243.29:8080/api/v1
+
+@username = testuser
+@password = monmotdepasse
+@token = {{login.response.body.token}}
+
+@gameId = 999999
+@unknownId = 123456789
+
+### ---------- Login ----------
+
+### Login correct -> 200 + token
+# @name login
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### Mauvais mot de passe -> 401
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "faux"
+}
+
+### Utilisateur inconnu -> 401
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+  "username": "inconnu",
+  "password": "{{password}}"
+}
+
+### JSON invalide -> 400
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{ "username": "testuser"
+
+### ---------- Routes protégées sans token valide ----------
+
+### Créer sans token -> 401
+POST {{baseUrl}}/games
+Content-Type: application/json
+
+{
+  "id": {{gameId}},
+  "title": "Sans token"
+}
+
+### Modifier avec un mauvais token -> 401
+PUT {{baseUrl}}/games/{{gameId}}
+Content-Type: application/json
+Authorization: Bearer mauvais-token
+
+{
+  "title": "Mauvais token"
+}
+
+### Supprimer sans token -> 401
+DELETE {{baseUrl}}/games/{{gameId}}
+
+### ---------- Création ----------
+
+### Créer un jeu -> 201
+POST {{baseUrl}}/games
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "id": {{gameId}},
+  "title": "Jeu de test",
+  "required_age": 12,
+  "is_free": false,
+  "description": "Un jeu créé pour tester l'API",
+  "image": "https://example.com/test.jpg",
+  "website": "https://example.com",
+  "developers": ["ESGI"],
+  "publishers": ["ESGI"],
+  "platforms": ["windows", "linux"],
+  "metacritic_score": 75,
+  "categories": [
+    { "id": 2, "description": "Single-player" }
+  ],
+  "genres": [
+    { "id": 1, "description": "Action" }
+  ],
+  "recommendations": 0,
+  "release_date": "2026-10-13",
+  "release_year": 2026
+}
+
+### Créer un jeu avec un JSON invalide -> 400
+POST {{baseUrl}}/games
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "title": "JSON invalide"
+
+### ---------- Lecture ----------
+
+### Lister les jeux (page 1, 5 résultats par défaut) -> 200
+GET {{baseUrl}}/games
+
+### Pagination -> 200
+GET {{baseUrl}}/games?page=2&limit=10
+
+### Filtrer par titre -> 200
+GET {{baseUrl}}/games?title=test
+
+### Filtrer par année -> 200
+GET {{baseUrl}}/games?release_year=2026
+
+### Trier par titre décroissant -> 200
+GET {{baseUrl}}/games?ordering=-title
+
+### Page invalide -> 400
+GET {{baseUrl}}/games?page=0
+
+### Limit trop grand -> 400
+GET {{baseUrl}}/games?limit=101
+
+### Année invalide -> 400
+GET {{baseUrl}}/games?release_year=abc
+
+### Tri invalide -> 400
+GET {{baseUrl}}/games?ordering=prix
+
+### Récupérer le jeu créé -> 200
+GET {{baseUrl}}/games/{{gameId}}
+
+### Récupérer un jeu inexistant -> 404
+GET {{baseUrl}}/games/{{unknownId}}
+
+### Récupérer avec un id invalide -> 400
+GET {{baseUrl}}/games/abc
+
+### ---------- Modification ----------
+
+### Modifier le jeu -> 200
+PUT {{baseUrl}}/games/{{gameId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title": "Jeu de test modifié",
+  "required_age": 16,
+  "is_free": true,
+  "description": "Description mise à jour",
+  "image": "https://example.com/test-v2.jpg",
+  "website": "https://example.com",
+  "developers": ["ESGI"],
+  "publishers": ["ESGI"],
+  "platforms": ["windows"],
+  "metacritic_score": 90,
+  "categories": [
+    { "id": 1, "description": "Multi-player" }
+  ],
+  "genres": [
+    { "id": 2, "description": "Strategy" }
+  ],
+  "recommendations": 10,
+  "release_date": "2026-10-14",
+  "release_year": 2026
+}
+
+### Modifier avec un id invalide -> 400
+PUT {{baseUrl}}/games/abc
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title": "Id invalide"
+}
+
+### ---------- Suppression ----------
+
+### Supprimer le jeu -> 200
+DELETE {{baseUrl}}/games/{{gameId}}
+Authorization: Bearer {{token}}
+
+### Vérifier la suppression -> 404
+GET {{baseUrl}}/games/{{gameId}}
+
+### Supprimer avec un id invalide -> 400
+DELETE {{baseUrl}}/games/abc
+Authorization: Bearer {{token}}
