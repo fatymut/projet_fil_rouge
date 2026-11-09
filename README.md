@@ -2,23 +2,30 @@
 
 API REST en Go qui expose une base de jeux Steam stockée dans MongoDB.
 
-> État actuel : CRUD des jeux, pagination, tri et filtres fonctionnels. Authentification JWT en cours.
+> État actuel : CRUD des jeux, pagination, tri, filtres, authentification JWT et documentation Swagger fonctionnels.
 
 ## Stack
 
-- **Go** (1.22+) : serveur HTTP avec `net/http`
+- **Go** (1.25+) : serveur HTTP avec `net/http`
 - **MongoDB** : base `pa2026`, collection `games`
+- **JWT + bcrypt** : authentification des routes d'écriture
+- **Swagger UI / OpenAPI 3** : documentation interactive
 - **Docker Compose** : lance MongoDB et l'API
 
 ## Structure du projet
 
 ```
-├── main.go           Point d'entrée, déclaration des routes
-├── admin/            Handlers HTTP
+├── main.go           Point d'entrée
+├── route/
+│   ├── routes.go     Déclaration des routes
+│   └── web/          Fichier de tests HTTP (games.http)
+├── admin/            Handlers HTTP des jeux
+├── auth/             Login, middleware JWT, création d'utilisateurs
 ├── bdd/              Connexion et requêtes MongoDB
-├── models/           Structs (Game, Genre, Category, APIError)
-├── auth/             JWT + bcrypt (en cours)
+├── models/           Structs (Game, Genre, Category, User, LoginRequest)
+├── docs/             Contrat OpenAPI et page Swagger UI
 ├── docker-compose.yml
+├── users.json        Utilisateurs de l'API (mots de passe hachés)
 └── steam.json        Données sources
 ```
 
@@ -27,8 +34,10 @@ API REST en Go qui expose une base de jeux Steam stockée dans MongoDB.
 ### 1. Lancer les conteneurs
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
+
+L'API écoute sur le port **8080**, et MongoDB sur `127.0.0.1:27017`.
 
 ### 2. Importer les données
 
@@ -37,19 +46,28 @@ docker cp steam.json mongodb:/steam.json
 docker exec -it mongodb mongoimport --db pa2026 --collection games --file /steam.json --jsonArray
 ```
 
-Vérifier l'import :
+Vérifier l'import (51 822 jeux attendus) :
 
 ```bash
 docker exec -it mongodb mongosh pa2026 --quiet --eval "db.games.countDocuments()"
 ```
 
-### 3. Lancer l'API (hors Docker)
+### 3. Créer un utilisateur
 
 ```bash
-go run main.go
+go run . u monutilisateur -p monmotdepasse
 ```
 
-L'API écoute sur le port **8080**.
+L'utilisateur est ajouté à `users.json`, monté dans le conteneur de l'API : aucun redémarrage n'est nécessaire.
+
+### Lancer l'API hors Docker (facultatif)
+
+Arrêter d'abord le conteneur de l'API, qui occupe le port 8080 :
+
+```bash
+docker compose stop webapi
+JWT_SECRET=supersecretkey123 go run .
+```
 
 ### Variables d'environnement
 
@@ -57,7 +75,24 @@ L'API écoute sur le port **8080**.
 |---|---|---|
 | `MONGO_URI` | Adresse de MongoDB | `mongodb://localhost:27017` |
 | `DB_NAME` | Nom de la base | `pa2026` |
-| `PORT` | Port de l'API | `8080` |
+| `JWT_SECRET` | Clé de signature des tokens, **obligatoire** pour les routes protégées | Aucun (défini dans `docker-compose.yml`) |
+
+## Documentation Swagger
+
+Une fois l'API lancée, la documentation interactive est disponible sur **http://localhost:8080/swagger**. Le contrat OpenAPI brut est sur `/swagger/openapi.yaml`.
+
+Pour appeler une route protégée :
+
+1. Exécuter `POST /login` et copier le `token` reçu.
+2. Cliquer sur **Authorize** et coller le token, sans le préfixe `Bearer`.
+
+La page charge Swagger UI depuis un CDN : une connexion internet est nécessaire pour l'afficher.
+
+## Tester l'API
+
+Le fichier [`route/web/games.http`](route/web/games.http) contient des requêtes pour toutes les routes, avec le statut attendu pour chacune. Il s'utilise avec l'extension VS Code **REST Client**.
+
+Il repose sur l'utilisateur `testuser`, déjà présent dans `users.json`. Exécuter les requêtes dans l'ordre : le login fournit le token des suivantes.
 
 ## Modèle de données
 
@@ -86,17 +121,30 @@ Un jeu est identifié par son **id Steam** (champ `_id` dans MongoDB, `id` dans 
 
 ## Routes
 
-| Méthode | Route | Description | Succès |
-|---|---|---|---|
-| GET | `/api/v1/games` | Liste des jeux | 200 |
-| GET | `/api/v1/games/{id}` | Détail d'un jeu | 200 |
-| POST | `/api/v1/games` | Créer un jeu | 201 |
-| PUT | `/api/v1/games/{id}` | Remplacer un jeu | 200 |
-| DELETE | `/api/v1/games/{id}` | Supprimer un jeu | 204 |
+| Méthode | Route | Description | Token | Succès |
+|---|---|---|---|---|
+| POST | `/api/v1/login` | Obtenir un token JWT | Non | 200 |
+| GET | `/api/v1/games` | Liste des jeux | Non | 200 |
+| GET | `/api/v1/games/{id}` | Détail d'un jeu | Non | 200 |
+| POST | `/api/v1/games` | Créer un jeu | **Oui** | 201 |
+| PUT | `/api/v1/games/{id}` | Remplacer un jeu | **Oui** | 200 |
+| DELETE | `/api/v1/games/{id}` | Supprimer un jeu | **Oui** | 200 |
+| GET | `/swagger` | Documentation Swagger UI | Non | 200 |
+| GET | `/swagger/openapi.yaml` | Contrat OpenAPI | Non | 200 |
 
 Notes :
 - Le **PUT remplace le jeu entier** : les champs absents du body sont vidés.
 - Pour le PUT, l'id de l'**URL** fait foi, celui du body est ignoré.
+
+## Authentification
+
+`POST /api/v1/login` vérifie le nom d'utilisateur et le mot de passe, puis renvoie un token JWT valable **24 h** :
+
+```json
+{ "token": "eyJhbGciOiJIUzI1NiIs..." }
+```
+
+Les routes protégées attendent ce token dans l'en-tête `Authorization: Bearer <token>`. Un token absent, invalide ou expiré renvoie **401**.
 
 ## Liste des jeux : pagination, tri et filtres
 
@@ -107,7 +155,7 @@ Notes :
 | `page` | Numéro de la page | Entier ≥ 1 | `1` |
 | `limit` | Nombre de jeux par page | Entier de 1 à 100 | `5` |
 | `ordering` | Tri | `title`, `-title`, `release_year`, `-release_year` | Par id croissant |
-| `title` | Titre contenant ce texte, sans tenir compte des majuscules | Texte | Aucun filtre |
+| `title` | Titre contenant ce texte, sans tenir compte des majuscules | Texte (interprété comme une expression régulière) | Aucun filtre |
 | `release_year` | Année de sortie exacte | Entier | Aucun filtre |
 
 - Un `-` devant le champ de `ordering` trie en ordre décroissant.
@@ -122,30 +170,22 @@ Format de la réponse :
 {
   "page": 2,
   "limit": 5,
-  "total": 27075,
-  "total_pages": 5415,
+  "total": 51822,
+  "total_pages": 10365,
   "results": [ { "id": 570, "title": "Dota 2", "...": "..." } ]
 }
 ```
 
 ## Format des erreurs
 
-Toutes les erreurs sont renvoyées en JSON :
-
-```json
-{
-  "status": 404,
-  "error": "Not Found",
-  "message": "jeu introuvable"
-}
-```
+Les erreurs sont renvoyées en texte brut, avec le code HTTP correspondant.
 
 | Code | Cas |
 |---|---|
-| 400 | Body JSON invalide, id non numérique, champs obligatoires manquants |
-| 404 | Jeu introuvable |
-| 409 | Un jeu avec cet id existe déjà (POST) |
-| 500 | Erreur serveur ou base de données |
+| 400 | Body JSON invalide, id non numérique, paramètre de liste invalide |
+| 401 | Identifiants incorrects, ou token absent, invalide ou expiré |
+| 404 | Jeu introuvable (GET) |
+| 500 | Erreur serveur ou base de données, y compris id déjà utilisé (POST) et jeu inexistant (PUT, DELETE) |
 
 ## Exemples de requêtes
 
@@ -173,11 +213,23 @@ Mettre l'URL entre guillemets dans le terminal quand elle contient un `&`.
 curl -i http://localhost:8080/api/v1/games/570
 ```
 
+### Se connecter
+
+Le token est gardé dans la variable `TOKEN`, utilisée par les exemples suivants :
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "password": "monmotdepasse"}' \
+  | sed -E 's/.*"token":"([^"]+)".*/\1/')
+```
+
 ### Créer un jeu
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/games \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "id": 999999,
     "title": "Jeu de test",
@@ -199,6 +251,7 @@ curl -i -X POST http://localhost:8080/api/v1/games \
 ```bash
 curl -i -X PUT http://localhost:8080/api/v1/games/999999 \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "title": "Jeu de test modifie",
     "required_age": 16,
@@ -212,20 +265,26 @@ curl -i -X PUT http://localhost:8080/api/v1/games/999999 \
 ### Supprimer un jeu
 
 ```bash
-curl -i -X DELETE http://localhost:8080/api/v1/games/999999
+curl -i -X DELETE http://localhost:8080/api/v1/games/999999 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Sécurité
 
 - MongoDB n'est **pas exposé publiquement** : le port 27017 est publié uniquement sur `127.0.0.1`.
 - L'API joint MongoDB par le réseau interne Docker.
+- Les mots de passe sont hachés avec bcrypt dans `users.json`.
+- Les routes `POST`, `PUT` et `DELETE` des jeux exigent un token JWT.
+- `testuser` est un compte de test dont le mot de passe figure dans le dépôt : **à retirer de `users.json` en production**, et `JWT_SECRET` est à remplacer.
 
 ## Reste à faire
 
 - [x] Pagination (`page`, `limit`)
 - [x] Tri (`ordering`)
 - [x] Filtres (`title`, `release_year`)
+- [x] Authentification JWT sur POST, PUT et DELETE
+- [x] Documentation Swagger / OpenAPI
 - [ ] Erreurs au format JSON sur toutes les routes
-- [ ] Authentification JWT sur POST, PUT et DELETE
-- [ ] Documentation Swagger / OpenAPI
+- [ ] Codes 404 sur PUT et DELETE, 409 sur POST si l'id existe déjà
+- [ ] Validation des champs obligatoires à la création d'un jeu
 - [ ] CORS et logs
